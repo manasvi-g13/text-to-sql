@@ -1,0 +1,110 @@
+# Few-shot examples for text-to-SQL (SQLite). Tables: fact_orders, dim_users,
+# dim_products, dim_sellers, dim_reviews, dim_geography.
+
+- question: What are the top 5 product categories by total revenue from delivered orders?
+  sql: |
+    -- Revenue uses order_total_usd; restrict to delivered lines per semantic rules.
+    SELECT
+      p.category_name,
+      SUM(fo.order_total_usd) AS total_revenue_usd
+    FROM fact_orders AS fo
+    JOIN dim_products AS p
+      ON fo.product_id = p.product_id
+    WHERE fo.order_status = 'delivered'
+    GROUP BY p.category_name
+    ORDER BY total_revenue_usd DESC
+    LIMIT 5;
+
+- question: Show monthly revenue for the last 12 months as a trend.
+  sql: |
+    -- Bucket by calendar month with SQLite strftime; filter window on created_at.
+    SELECT
+      strftime('%Y-%m', fo.created_at) AS revenue_month,
+      SUM(fo.order_total_usd) AS monthly_revenue_usd
+    FROM fact_orders AS fo
+    WHERE fo.order_status = 'delivered'
+      AND fo.created_at >= datetime('now', '-12 months')
+    GROUP BY strftime('%Y-%m', fo.created_at)
+    ORDER BY revenue_month ASC;
+
+- question: Which 10 Brazilian states have the most orders from customers?
+  sql: |
+    -- Geographic breakdown uses buyer state from dim_users; count distinct orders (not raw lines).
+    SELECT
+      u.state AS brazilian_state,
+      COUNT(DISTINCT fo.order_id) AS order_count
+    FROM fact_orders AS fo
+    JOIN dim_users AS u
+      ON fo.user_id = u.user_id
+    WHERE fo.order_status = 'delivered'
+    GROUP BY u.state
+    ORDER BY order_count DESC
+    LIMIT 10;
+
+- question: For each product category with at least 100 reviews, what is the average review score, worst categories first?
+  sql: |
+    -- Join reviews to orders to products; HAVING enforces minimum sample size per category.
+    SELECT
+      p.category_name,
+      AVG(r.review_score) AS avg_review_score,
+      COUNT(*) AS review_count
+    FROM dim_reviews AS r
+    JOIN fact_orders AS fo
+      ON r.order_id = fo.order_id
+    JOIN dim_products AS p
+      ON fo.product_id = p.product_id
+    GROUP BY p.category_name
+    HAVING COUNT(*) >= 100
+    ORDER BY avg_review_score ASC;
+
+- question: List sellers who have more than 50 delivered orders and total revenue above the average seller's total revenue.
+  sql: |
+    -- CTEs: per-seller stats, then global average revenue across sellers; filter both conditions.
+    WITH seller_totals AS (
+      SELECT
+        fo.seller_id,
+        COUNT(DISTINCT fo.order_id) AS order_count,
+        SUM(fo.order_total_usd) AS seller_revenue_usd
+      FROM fact_orders AS fo
+      WHERE fo.order_status = 'delivered'
+      GROUP BY fo.seller_id
+    ),
+    avg_across_sellers AS (
+      SELECT AVG(seller_revenue_usd) AS avg_seller_revenue_usd
+      FROM seller_totals
+    )
+    SELECT
+      st.seller_id,
+      st.order_count,
+      st.seller_revenue_usd
+    FROM seller_totals AS st
+    CROSS JOIN avg_across_sellers AS aas
+    WHERE st.order_count > 50
+      AND st.seller_revenue_usd > aas.avg_seller_revenue_usd
+    ORDER BY st.seller_revenue_usd DESC;
+
+- question: Who are the top 10 customers by total spend on delivered orders?
+  sql: |
+    -- Window ranking on aggregated spend; ROW_NUMBER breaks ties deterministically vs RANK.
+    WITH customer_spend AS (
+      SELECT
+        fo.user_id,
+        SUM(fo.order_total_usd) AS total_spend_usd
+      FROM fact_orders AS fo
+      WHERE fo.order_status = 'delivered'
+      GROUP BY fo.user_id
+    ),
+    ranked_customers AS (
+      SELECT
+        user_id,
+        total_spend_usd,
+        ROW_NUMBER() OVER (ORDER BY total_spend_usd DESC) AS spend_rank
+      FROM customer_spend
+    )
+    SELECT
+      user_id,
+      total_spend_usd,
+      spend_rank
+    FROM ranked_customers
+    WHERE spend_rank <= 10
+    ORDER BY spend_rank ASC;
