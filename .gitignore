@@ -1,0 +1,10 @@
+venv/
+.env
+__pycache__/
+*.pyc
+chroma_store/
+data/olist.db
+data/raw/
+node_modules/
+frontend/build/
+.DS_Store
