@@ -85,17 +85,19 @@ def _log_query(
         session.close()
 
 
-def run_query(question: str, explain: bool = False) -> dict:
+def run_query(question: str, explain: bool = False, skip_guard: bool = False) -> dict:
     """
     Generate SQLite from ``question``, validate it, optionally cap rows, execute against
     ``DATABASE_URL``, optionally fetch a plain-English explanation, and persist an audit row.
 
     Retrieval pulls schema context via Chroma; few-shot YAML illustrates patterns. Unsafe SQL
-    (writes/DDL/exec keywords) returns early with ``requires_confirmation`` and does not run.
+    (writes/DDL/exec keywords) returns early with ``requires_confirmation`` and does not run,
+    unless ``skip_guard`` is True (human-approved execution path).
 
     Args:
         question: Natural language question for the warehouse.
         explain: When True, asks Claude for a concise bullet-point explanation of the final SQL.
+        skip_guard: When True, skip ``check_sql`` and execute generated SQL after ``inject_limit``.
 
     Returns:
         On success: ``sql``, ``results`` (list of row dicts), ``latency_ms``, ``tables_used``
@@ -137,25 +139,26 @@ def run_query(question: str, explain: bool = False) -> dict:
     raw_sql = _extract_assistant_text(gen_response)
     sql_clean = _clean_generated_sql(raw_sql)
 
-    guard = check_sql(sql_clean)
-    if not guard["safe"]:
-        latency_ms = (time.perf_counter() - started) * 1000
-        _log_query(
-            question=question,
-            generated_sql=sql_clean,
-            tables_used=tables_used,
-            latency_ms=latency_ms,
-            explain_requested=explain,
-        )
-        return {
-            "requires_confirmation": True,
-            "sql": sql_clean,
-            "reason": guard["reason"],
-            "latency_ms": latency_ms,
-            "tables_used": tables_used,
-            "results": None,
-            "explanation": None,
-        }
+    if not skip_guard:
+        guard = check_sql(sql_clean)
+        if not guard["safe"]:
+            latency_ms = (time.perf_counter() - started) * 1000
+            _log_query(
+                question=question,
+                generated_sql=sql_clean,
+                tables_used=tables_used,
+                latency_ms=latency_ms,
+                explain_requested=explain,
+            )
+            return {
+                "requires_confirmation": True,
+                "sql": sql_clean,
+                "reason": guard["reason"],
+                "latency_ms": latency_ms,
+                "tables_used": tables_used,
+                "results": None,
+                "explanation": None,
+            }
 
     sql_final = inject_limit(sql_clean)
     results = _execute_sql(sql_final)
