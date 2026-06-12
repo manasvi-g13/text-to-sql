@@ -9,7 +9,18 @@ from pathlib import Path
 
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+)
 
 load_dotenv()
 
@@ -36,6 +47,25 @@ def _read_csv(name: str, *, alt_names: tuple[str, ...] = ()) -> pd.DataFrame:
 
 def _print_loaded(table: str, df: pd.DataFrame) -> None:
     print(f"✓ Loaded {table}: {len(df)} rows")
+
+
+def _ensure_query_log_table(engine) -> None:
+    """Create the query_log table (used by agent/sql_chain.py to audit queries)
+    if it doesn't already exist. Matches model.schema.QueryLog."""
+    metadata = MetaData()
+    Table(
+        "query_log",
+        metadata,
+        Column("id", Integer, primary_key=True, autoincrement=True),
+        Column("question", String),
+        Column("generated_sql", Text),
+        Column("tables_used", String),
+        Column("latency_ms", Float),
+        Column("explain_requested", Boolean),
+        Column("created_at", DateTime),
+    )
+    metadata.create_all(engine, checkfirst=True)
+    print("✓ Ensured query_log table exists")
 
 
 def main() -> None:
@@ -142,6 +172,8 @@ def main() -> None:
     fact_orders["created_at"] = pd.to_datetime(fact_orders["created_at"], errors="coerce")
     fact_orders.to_sql("fact_orders", engine, if_exists="replace", index=False)
     _print_loaded("fact_orders", fact_orders)
+
+    _ensure_query_log_table(engine)
 
     print("✓ Database seeded successfully")
 

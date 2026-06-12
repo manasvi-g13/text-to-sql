@@ -1,34 +1,65 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 
 export interface ExplainPanelProps {
   explanation: string | null;
   loading: boolean;
 }
 
-function parseBulletLines(text: string): string[] {
+// Claude sometimes writes bullet lines using "•" rather than markdown's
+// "-"/"*" syntax; normalize those so react-markdown renders real <ul><li> lists.
+function normalizeMarkdown(text: string): string {
   return text
     .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => line.replace(/^[-*•]\s+/, "").replace(/^\d+\.\s+/, ""));
+    .map((line) => line.replace(/^(\s*)[•]\s+/, "$1- "))
+    .join("\n");
 }
+
+const markdownComponents: Components = {
+  h1: ({ children }) => (
+    <h4 className="mt-3 text-sm font-semibold text-sky-900 first:mt-0">{children}</h4>
+  ),
+  h2: ({ children }) => (
+    <h4 className="mt-3 text-sm font-semibold text-sky-900 first:mt-0">{children}</h4>
+  ),
+  h3: ({ children }) => (
+    <h4 className="mt-3 text-sm font-semibold text-sky-900 first:mt-0">{children}</h4>
+  ),
+  p: ({ children }) => <p className="mt-2 first:mt-0">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-sky-900">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  ul: ({ children }) => <ul className="mt-2 list-disc space-y-2 pl-5">{children}</ul>,
+  ol: ({ children }) => <ol className="mt-2 list-decimal space-y-2 pl-5">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  code: ({ children }) => (
+    <code className="rounded bg-sky-100 px-1 py-0.5 font-mono text-xs text-sky-900">
+      {children}
+    </code>
+  ),
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="font-medium text-sky-700 underline underline-offset-2 hover:text-sky-800"
+    >
+      {children}
+    </a>
+  ),
+};
 
 export function ExplainPanel({ explanation, loading }: ExplainPanelProps) {
   const [visible, setVisible] = useState(false);
-
-  const bullets = useMemo(
-    () => (explanation ? parseBulletLines(explanation) : []),
-    [explanation],
-  );
+  const hasContent = Boolean(explanation && explanation.trim().length > 0);
 
   useEffect(() => {
-    if (explanation && bullets.length > 0) {
+    if (hasContent) {
       setVisible(false);
       const id = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(id);
     }
     setVisible(false);
-  }, [explanation, bullets.length]);
+  }, [hasContent]);
 
   if (loading) {
     return (
@@ -51,7 +82,7 @@ export function ExplainPanel({ explanation, loading }: ExplainPanelProps) {
     );
   }
 
-  if (!explanation || bullets.length === 0) {
+  if (!hasContent) {
     return null;
   }
 
@@ -67,13 +98,11 @@ export function ExplainPanel({ explanation, loading }: ExplainPanelProps) {
         <span className="text-2xl leading-none" aria-hidden>
           💡
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 text-sm leading-relaxed text-sky-950/90">
           <h3 className="text-sm font-semibold text-sky-900">SQL Explanation</h3>
-          <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-sky-950/90">
-            {bullets.map((line, index) => (
-              <li key={`${index}-${line.slice(0, 24)}`}>{line}</li>
-            ))}
-          </ul>
+          <ReactMarkdown components={markdownComponents}>
+            {normalizeMarkdown(explanation ?? "")}
+          </ReactMarkdown>
         </div>
       </div>
     </div>
