@@ -1,4 +1,8 @@
-const API_BASE = "/api";
+// In production, point straight at the deployed backend (set via VITE_API_URL);
+// in development, the relative "/api" path is handled by the Vite dev server proxy.
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : "/api";
 
 const JSON_HEADERS: HeadersInit = {
   "Content-Type": "application/json",

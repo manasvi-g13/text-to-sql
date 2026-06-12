@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import type { DatabaseInfo } from "../api";
 import {
   deleteHistoryEntry,
@@ -63,7 +63,7 @@ export function Sidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [databases, search, historyRefreshKey, localVersion]);
 
-  const handleUploadChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       onUpload(file);
