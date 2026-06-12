@@ -2,23 +2,14 @@ import os
 
 from dotenv import load_dotenv
 import chromadb
-from sentence_transformers import SentenceTransformer
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 load_dotenv()
 
-MODEL_NAME = "all-MiniLM-L6-v2"
 COLLECTION_NAME = "table_descriptions"
 _DEFAULT_CHROMA_PATH = "./chroma_store"
 
-_embedding_model: SentenceTransformer | None = None
 _collection = None
-
-
-def _get_embedding_model() -> SentenceTransformer:
-    global _embedding_model
-    if _embedding_model is None:
-        _embedding_model = SentenceTransformer(MODEL_NAME)
-    return _embedding_model
 
 
 def _get_table_collection():
@@ -26,7 +17,9 @@ def _get_table_collection():
     if _collection is None:
         path = os.getenv("CHROMA_STORE_PATH", _DEFAULT_CHROMA_PATH)
         client = chromadb.PersistentClient(path=path)
-        _collection = client.get_collection(COLLECTION_NAME)
+        _collection = client.get_collection(
+            COLLECTION_NAME, embedding_function=DefaultEmbeddingFunction()
+        )
     return _collection
 
 
@@ -44,11 +37,9 @@ def get_relevant_tables(question: str, top_k: int = 3) -> list[dict]:
     Returns:
         A list of dicts with keys ``table_name`` and ``description`` (one entry per hit).
     """
-    model = _get_embedding_model()
     collection = _get_table_collection()
-    vec = model.encode(question, convert_to_numpy=True)
     results = collection.query(
-        query_embeddings=[vec.tolist()],
+        query_texts=[question],
         n_results=top_k,
         include=["documents"],
     )

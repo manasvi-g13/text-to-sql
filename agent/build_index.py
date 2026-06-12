@@ -8,13 +8,12 @@ if str(_ROOT) not in sys.path:
 
 from dotenv import load_dotenv
 import chromadb
-from sentence_transformers import SentenceTransformer
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 from agent.semantic_layer import TABLE_DESCRIPTIONS
 
 load_dotenv()
 
-MODEL_NAME = "all-MiniLM-L6-v2"
 COLLECTION_NAME = "table_descriptions"
 
 
@@ -33,24 +32,21 @@ def _format_table_document(table_name: str, info: dict) -> str:
 
 def main() -> None:
     chroma_path = os.getenv("CHROMA_STORE_PATH", "./chroma_store")
-    model = SentenceTransformer(MODEL_NAME)
     client = chromadb.PersistentClient(path=chroma_path)
+    embedding_function = DefaultEmbeddingFunction()
 
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
         pass
 
-    collection = client.create_collection(name=COLLECTION_NAME)
+    collection = client.create_collection(
+        name=COLLECTION_NAME, embedding_function=embedding_function
+    )
 
     for table_name, info in TABLE_DESCRIPTIONS.items():
         doc = _format_table_document(table_name, info)
-        embedding = model.encode(doc, convert_to_numpy=True)
-        collection.add(
-            ids=[table_name],
-            documents=[doc],
-            embeddings=[embedding.tolist()],
-        )
+        collection.add(ids=[table_name], documents=[doc])
         print(f"✓ Indexed {table_name}")
 
     print("Index built successfully")

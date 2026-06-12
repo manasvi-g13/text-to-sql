@@ -12,9 +12,9 @@ python-multipart==0.0.31
 # Database
 sqlalchemy==2.0.49
 
-# RAG / embeddings
+# RAG / embeddings (chromadb's built-in ONNX MiniLM embedding function —
+# no torch/transformers/sentence-transformers needed)
 chromadb==1.5.9
-sentence-transformers==5.4.1
 
 # Data loading & config
 pandas==3.0.3
