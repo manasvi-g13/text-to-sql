@@ -1,21 +1,68 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getDatabaseSchema, type TableSchemaInfo } from "../api";
 
 export interface SchemaExplorerProps {
-  schema: Record<string, string>;
+  encodedPath: string | null;
 }
 
-export function SchemaExplorer({ schema }: SchemaExplorerProps) {
+export function SchemaExplorer({ encodedPath }: SchemaExplorerProps) {
+  const [tables, setTables] = useState<TableSchemaInfo[]>([]);
   const [openTable, setOpenTable] = useState<string | null>(null);
-  const tables = Object.entries(schema).sort(([a], [b]) => a.localeCompare(b));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!encodedPath) {
+      setTables([]);
+      setOpenTable(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    getDatabaseSchema(encodedPath)
+      .then((data) => {
+        setTables(data.tables);
+        setOpenTable(null);
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Failed to load schema");
+        setTables([]);
+      })
+      .finally(() => setLoading(false));
+  }, [encodedPath]);
 
   const toggle = (tableName: string) => {
     setOpenTable((current) => (current === tableName ? null : tableName));
   };
 
+  if (!encodedPath) {
+    return (
+      <aside className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        Select a database to view its schema
+      </aside>
+    );
+  }
+
+  if (loading) {
+    return (
+      <aside className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        Loading schema…
+      </aside>
+    );
+  }
+
+  if (error) {
+    return (
+      <aside className="w-full rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+        {error}
+      </aside>
+    );
+  }
+
   if (tables.length === 0) {
     return (
       <aside className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-        No schema available
+        No tables found
       </aside>
     );
   }
@@ -28,13 +75,13 @@ export function SchemaExplorer({ schema }: SchemaExplorerProps) {
         </h2>
       </div>
       <ul className="divide-y divide-slate-100">
-        {tables.map(([tableName, description]) => {
-          const isOpen = openTable === tableName;
+        {tables.map((table) => {
+          const isOpen = openTable === table.name;
           return (
-            <li key={tableName}>
+            <li key={table.name}>
               <button
                 type="button"
-                onClick={() => toggle(tableName)}
+                onClick={() => toggle(table.name)}
                 className="flex w-full items-center gap-2 px-4 py-3 text-left transition hover:bg-slate-50"
                 aria-expanded={isOpen}
               >
@@ -52,12 +99,36 @@ export function SchemaExplorer({ schema }: SchemaExplorerProps) {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span className="font-semibold text-slate-900">{tableName}</span>
+                <span className="font-semibold text-slate-900">{table.name}</span>
+                <span className="ml-auto shrink-0 text-xs text-slate-400">
+                  {table.row_count.toLocaleString()} rows
+                </span>
               </button>
               {isOpen && (
-                <p className="border-t border-slate-100 px-4 pb-4 pl-10 text-sm leading-relaxed text-slate-500">
-                  {description}
-                </p>
+                <div className="border-t border-slate-100 px-4 pb-4 pl-10">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="text-slate-400">
+                        <th className="py-1.5 pr-4 font-medium uppercase tracking-wide">
+                          Column
+                        </th>
+                        <th className="py-1.5 font-medium uppercase tracking-wide">
+                          Type
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {table.columns.map((col) => (
+                        <tr key={col.name}>
+                          <td className="py-1.5 pr-4 font-mono text-slate-700">
+                            {col.name}
+                          </td>
+                          <td className="py-1.5 text-slate-500">{col.type}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </li>
           );

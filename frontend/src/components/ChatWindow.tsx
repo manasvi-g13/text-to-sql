@@ -1,84 +1,93 @@
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 
-const EXAMPLE_QUESTIONS = [
-  "Top 10 products by revenue",
-  "Monthly order trends",
-  "Which states have most cancellations",
-] as const;
+export type ChatMode = "generate" | "explain";
 
 export interface ChatWindowProps {
-  onSubmit: (question: string) => void;
+  value: string;
+  onChange: (value: string) => void;
+  onGenerate: (question: string) => void;
+  onExplain: (question: string) => void;
   loading: boolean;
+  loadingMode?: ChatMode | null;
+  disabled?: boolean;
 }
 
-export function ChatWindow({ onSubmit, loading }: ChatWindowProps) {
-  const [input, setInput] = useState("");
+export function ChatWindow({
+  value,
+  onChange,
+  onGenerate,
+  onExplain,
+  loading,
+  loadingMode = null,
+  disabled = false,
+}: ChatWindowProps) {
+  const isDisabled = loading || disabled;
 
-  const submit = () => {
-    const question = input.trim();
-    if (!question || loading) {
+  const submit = (mode: ChatMode) => {
+    const question = value.trim();
+    if (!question || isDisabled) {
       return;
     }
-    onSubmit(question);
-    setInput("");
+    if (mode === "generate") {
+      onGenerate(question);
+    } else {
+      onExplain(question);
+    }
+    onChange("");
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    submit();
+    submit("generate");
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      submit();
+      submit("generate");
     }
   };
 
-  return (
-    <div className="w-full max-w-2xl mx-auto space-y-4">
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-          placeholder="Ask anything about your data..."
-          className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-          aria-label="Question"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="inline-flex min-w-[5.5rem] items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-400"
-          aria-busy={loading}
-        >
-          {loading ? (
-            <span
-              className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"
-              aria-hidden
-            />
-          ) : (
-            "Send"
-          )}
-        </button>
-      </form>
+  const buttonBase =
+    "inline-flex min-w-[7.5rem] items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-sm transition focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
 
-      <div className="flex flex-wrap gap-2">
-        {EXAMPLE_QUESTIONS.map((question) => (
-          <button
-            key={question}
-            type="button"
-            disabled={loading}
-            onClick={() => setInput(question)}
-            className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {question}
-          </button>
-        ))}
-      </div>
-    </div>
+  const Spinner = (
+    <span
+      className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+      aria-hidden
+    />
+  );
+
+  return (
+    <form onSubmit={handleSubmit} className="flex w-full flex-wrap gap-2">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={isDisabled}
+        placeholder="Ask anything about your data..."
+        className="min-w-[12rem] flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+        aria-label="Question"
+      />
+      <button
+        type="submit"
+        disabled={isDisabled || !value.trim()}
+        aria-busy={loading && loadingMode === "generate"}
+        className={`${buttonBase} bg-sky-600 hover:bg-sky-500 focus:ring-sky-400`}
+      >
+        {loading && loadingMode === "generate" ? Spinner : "Generate SQL"}
+      </button>
+      <button
+        type="button"
+        onClick={() => submit("explain")}
+        disabled={isDisabled || !value.trim()}
+        aria-busy={loading && loadingMode === "explain"}
+        className={`${buttonBase} bg-purple-600 hover:bg-purple-500 focus:ring-purple-400`}
+      >
+        {loading && loadingMode === "explain" ? Spinner : "Explain"}
+      </button>
+    </form>
   );
 }
 

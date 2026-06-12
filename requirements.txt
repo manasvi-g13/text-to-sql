@@ -7,6 +7,7 @@ anthropic==0.101.0
 fastapi==0.136.1
 uvicorn[standard]==0.46.0
 pydantic==2.13.4
+python-multipart==0.0.31
 
 # Database
 sqlalchemy==2.0.49
